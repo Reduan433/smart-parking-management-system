@@ -131,8 +131,9 @@ const filteredSlots = parkingSlots.filter((slot) =>
         </div>
       </section>
 
+      
       <footer className="border-t border-slate-800 px-6 py-8 text-center text-sm text-slate-500">
-        © {new Date().getFullYear()} ParkSmart · Smart Parking Management System · Capstone Project
+        © 2026 ParkSmart · Smart Parking Management System · Capstone Project
       </footer>
     </main>
   );
