@@ -84,7 +84,7 @@ alert(`Slot ${slot.slot_number} booked successfully!`);
 
   
 const filteredSlots = parkingSlots.filter((slot) =>
-  `${slot.id} ${slot.type} ${slot.location}`
+  `${slot.slot_number} ${slot.slot_type} ${slot.floor}`
     .toLowerCase()
     .includes(searchTerm.toLowerCase())
 );
