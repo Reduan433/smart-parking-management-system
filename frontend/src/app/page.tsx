@@ -1,16 +1,88 @@
- "use client";
-import Link from "next/link";
-import { useState } from "react";
 
-const parkingSlots = [
-  { id: "A01", type: "Compact", location: "Ground Floor", price: 50, status: "Available" },
-  { id: "A02", type: "Standard", location: "Ground Floor", price: 70, status: "Available" },
-  { id: "B01", type: "Premium", location: "Level 1", price: 100, status: "Available" },
-];
+"use client";
+
+import Link from "next/link";
+import { useEffect, useState } from "react";
+import { supabase } from "@/lib/supabase";
+import CameraMonitor from "./CameraMonitor";
+
+type ParkingSlot = {
+  id: number;
+  slot_number: string;
+  floor: string;
+  slot_type: string;
+  hourly_rate: number;
+  status: "available" | "occupied" | "reserved";
+};
+
 
 export default function Home() {
   const [searchTerm, setSearchTerm] = useState("");
+  const [bookingLoading, setBookingLoading] = useState(false);
 
+async function bookSlot(slot: ParkingSlot) {
+  setBookingLoading(true);
+
+  const { error } = await supabase
+    .from("bookings")
+    .insert({
+      slot_id: slot.id,
+      total_amount: slot.hourly_rate,
+    });
+
+  setBookingLoading(false);
+
+  if (error) {
+    alert("Booking failed: " + error.message);
+    return;
+  }
+
+  const { error: updateError } = await supabase
+  .from("parking_slots")
+  .update({ status: "reserved" })
+  .eq("id", slot.id)
+  .eq("status", "available");
+
+if (updateError) {
+  alert("Booking saved, but slot status update failed: " + updateError.message);
+  return;
+}
+
+setParkingSlots((currentSlots) =>
+  currentSlots.map((item) =>
+    item.id === slot.id
+      ? { ...item, status: "reserved" }
+      : item
+  )
+);
+
+alert(`Slot ${slot.slot_number} booked successfully!`);
+}
+  const [parkingSlots, setParkingSlots] = useState<ParkingSlot[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    async function loadParkingSlots() {
+      const { data, error } = await supabase
+        .from("parking_slots")
+        .select("*")
+        .order("slot_number");
+
+      if (error) {
+        setError("Parking slots load করা যায়নি।");
+        console.error(error.message);
+      } else {
+        setParkingSlots(data ?? []);
+      }
+
+      setLoading(false);
+    }
+
+    loadParkingSlots();
+  }, []);
+
+  
 const filteredSlots = parkingSlots.filter((slot) =>
   `${slot.id} ${slot.type} ${slot.location}`
     .toLowerCase()
@@ -104,14 +176,64 @@ const filteredSlots = parkingSlots.filter((slot) =>
             <span className="rounded-full border border-slate-700 px-4 py-2 text-sm text-slate-300">3 sample slots</span>
           </div>
           <div className="mt-10 grid gap-5 md:grid-cols-3">
+            {loading && (
+  <p className="col-span-full py-8 text-center text-slate-400">
+    Parking slots load হচ্ছে...
+  </p>
+)}
+
+{!loading && error && (
+  <p className="col-span-full py-8 text-center text-rose-300">
+    {error}
+  </p>
+)}
+
+{!loading && !error && filteredSlots.length === 0 && (
+  <p className="col-span-full py-8 text-center text-slate-400">
+    কোনো parking slot পাওয়া যায়নি।
+  </p>
+)}
             {filteredSlots.map((slot) => (
-              <article key={slot.id} className="rounded-2xl border border-slate-800 bg-slate-950 p-6 transition hover:border-emerald-400/50">
-                <div className="flex items-center justify-between"><span className="rounded-lg bg-slate-800 px-3 py-2 text-sm font-bold">{slot.id}</span><span className="text-sm text-emerald-300">● {slot.status}</span></div>
-                <h3 className="mt-5 text-xl font-bold">{slot.type} Parking</h3>
-                <p className="mt-2 text-sm text-slate-400">{slot.location}</p>
-                <p className="mt-6 text-2xl font-bold">৳{slot.price}<span className="text-sm font-normal text-slate-400"> / hour</span></p>
-                <button type="button" onClick={() => window.alert("Booking will be enabled after database integration.")} className="mt-6 w-full rounded-xl bg-emerald-400 px-4 py-3 font-bold text-slate-950 hover:bg-emerald-300">Explore Slot</button>
-              </article>
+              
+<article
+  key={slot.id}
+  className="rounded-2xl border border-slate-800 bg-slate-950 p-6 transition hover:border-emerald-400/50"
+>
+  <div className="flex items-center justify-between">
+    <span className="rounded-lg bg-slate-800 px-3 py-2 text-sm font-bold">
+      {slot.slot_number}
+    </span>
+    <span
+      className={`text-sm ${
+        slot.status === "available"
+          ? "text-emerald-300"
+          : slot.status === "occupied"
+            ? "text-rose-300"
+            : "text-amber-300"
+      }`}
+    >
+      ● {slot.status}
+    </span>
+  </div>
+
+  <h3 className="mt-5 text-xl font-bold">{slot.slot_type} Parking</h3>
+  <p className="mt-2 text-sm text-slate-400">{slot.floor}</p>
+
+  <p className="mt-6 text-2xl font-bold">
+    ৳{slot.hourly_rate}
+    <span className="text-sm font-normal text-slate-400"> / hour</span>
+  </p>
+
+  <button
+    type="button"
+    disabled={slot.status !== "available" || bookingLoading}
+    onClick={() => bookSlot(slot)}
+    className="mt-6 w-full rounded-xl bg-emerald-400 px-4 py-3 font-bold text-slate-950 hover:bg-emerald-300 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-400"
+  >
+    {slot.status === "available" ? "Explore Slot" : "Unavailable"}
+  </button>
+</article>
+
             ))}
           </div>
         </div>
@@ -135,6 +257,7 @@ const filteredSlots = parkingSlots.filter((slot) =>
       <footer className="border-t border-slate-800 px-6 py-8 text-center text-sm text-slate-500">
         © 2026 ParkSmart · Smart Parking Management System · Capstone Project
       </footer>
+      <CameraMonitor />
     </main>
   );
 }
