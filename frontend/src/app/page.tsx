@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import CameraMonitor from "./CameraMonitor";
+import { useRouter } from "next/navigation";
 
 type ParkingSlot = {
   id: number;
@@ -17,18 +18,33 @@ type ParkingSlot = {
 
 
 export default function Home() {
+
+  const [userEmail, setUserEmail] = useState<string | null>(null);
+const [profileOpen, setProfileOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [bookingLoading, setBookingLoading] = useState(false);
+  const router = useRouter();
+
 
 async function bookSlot(slot: ParkingSlot) {
+  const { data: { user }, error: authError } =
+    await supabase.auth.getUser();
+
+  if (authError || !user) {
+    router.push("/login");
+    return;
+  }
+
   setBookingLoading(true);
+
 
   const { error } = await supabase
     .from("bookings")
-    .insert({
-      slot_id: slot.id,
-      total_amount: slot.hourly_rate,
-    });
+.insert({
+  slot_id: slot.id,
+  user_id: user.id,
+  total_amount: slot.hourly_rate,
+});
 
   setBookingLoading(false);
 
@@ -78,7 +94,6 @@ alert(`Slot ${slot.slot_number} booked successfully!`);
 
       setLoading(false);
     }
-
     loadParkingSlots();
   }, []);
 
@@ -88,6 +103,37 @@ const filteredSlots = parkingSlots.filter((slot) =>
     .toLowerCase()
     .includes(searchTerm.toLowerCase())
 );
+
+useEffect(() => {
+  async function loadUser() {
+    const { data } = await supabase.auth.getUser();
+    setUserEmail(data.user?.email ?? null);
+  }
+
+  loadUser();
+
+  const {
+    data: { subscription },
+  } = supabase.auth.onAuthStateChange((_event, session) => {
+    setUserEmail(session?.user?.email ?? null);
+  });
+
+  return () => subscription.unsubscribe();
+}, []);
+
+async function handleLogout() {
+  const { error } = await supabase.auth.signOut();
+
+  if (error) {
+    alert("Logout failed: " + error.message);
+    return;
+  }
+
+  setProfileOpen(false);
+  setUserEmail(null);
+  router.push("/login");
+}
+
   return (
     <main className="min-h-screen bg-slate-950 text-white">
       <nav className="mx-auto flex max-w-7xl items-center justify-between px-6 py-6">
@@ -99,12 +145,64 @@ const filteredSlots = parkingSlots.filter((slot) =>
           <a href="#parking" className="hover:text-emerald-400">Parking Slots</a>
           <a href="#features" className="hover:text-emerald-400">Features</a>
         </div>
-        <Link
-          href="#parking"
-          className="rounded-full bg-emerald-400 px-5 py-2.5 font-semibold text-slate-950 hover:bg-emerald-300"
-        >
-          Find Parking
-        </Link>
+        
+<div className="relative">
+  {userEmail ? (
+    <>
+      <button
+        type="button"
+        onClick={() => setProfileOpen(!profileOpen)}
+        className="flex items-center gap-2 rounded-full border border-slate-700 bg-slate-900 px-4 py-2.5 hover:border-emerald-400"
+      >
+        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-400 font-bold text-slate-950">
+          {userEmail.charAt(0).toUpperCase()}
+        </span>
+        <span className="hidden max-w-32 truncate sm:block">My Account</span>
+        <span>⌄</span>
+      </button>
+
+      {profileOpen && (
+        <div className="absolute right-0 z-50 mt-3 w-64 rounded-xl border border-slate-700 bg-slate-900 p-3 shadow-xl">
+          <p className="break-all border-b border-slate-700 px-3 py-3 text-sm text-slate-400">
+            {userEmail}
+          </p>
+
+          <Link
+            href="/dashboard"
+            className="block rounded-lg px-3 py-3 hover:bg-slate-800"
+            onClick={() => setProfileOpen(false)}
+          >
+            My Dashboard
+          </Link>
+
+          <Link
+            href="/profile"
+            className="block rounded-lg px-3 py-3 hover:bg-slate-800"
+            onClick={() => setProfileOpen(false)}
+          >
+            My Profile
+          </Link>
+
+          <button
+            type="button"
+            onClick={handleLogout}
+            className="w-full rounded-lg px-3 py-3 text-left text-rose-300 hover:bg-slate-800"
+          >
+            Logout
+          </button>
+        </div>
+      )}
+    </>
+  ) : (
+    <Link
+      href="/login"
+      className="rounded-full bg-emerald-400 px-5 py-2.5 font-semibold text-slate-950 hover:bg-emerald-300"
+    >
+      Login / Register
+    </Link>
+  )}
+</div>
+
       </nav>
 
       <section id="home" className="mx-auto grid max-w-7xl items-center gap-12 px-6 py-20 md:grid-cols-2 md:py-28">
@@ -190,7 +288,7 @@ const filteredSlots = parkingSlots.filter((slot) =>
 
 {!loading && !error && filteredSlots.length === 0 && (
   <p className="col-span-full py-8 text-center text-slate-400">
-    কোনো parking slot পাওয়া যায়নি।
+    NO parking slot available
   </p>
 )}
             {filteredSlots.map((slot) => (
